@@ -15,6 +15,68 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  package-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out CI payload
+        uses: actions/checkout@v4
+
+      - name: Expand final Star Janitor candidate
+        run: |
+          set -euo pipefail
+          cat payload/chunk00 payload/chunk01 payload/chunk02 payload/chunk03 payload/chunk04 \
+            | base64 --decode \
+            | tar -xJf -
+          cp overrides/styles/responsive.css star-janitor-ci/styles/responsive.css
+          cp overrides/tsconfig.json star-janitor-ci/tsconfig.json
+          cp overrides/tests/unit/build-config.test.mjs star-janitor-ci/tests/unit/build-config.test.mjs
+
+      - name: Create and inspect source ZIP
+        run: |
+          set -euo pipefail
+          test -f star-janitor-ci/package-lock.json
+          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  star-janitor-ci/package-lock.json" | sha256sum --check
+
+          rm -f star-janitor-source-final.zip star-janitor-source-final.zip.sha256
+          (
+            cd star-janitor-ci
+            zip -q -r ../star-janitor-source-final.zip . \
+              -x 'node_modules/*' '*/node_modules/*' \
+                 '.next/*' '*/.next/*' \
+                 'ci-artifacts/*' '*/ci-artifacts/*' \
+                 'playwright-report/*' '*/playwright-report/*' \
+                 'test-results/*' '*/test-results/*' \
+                 '.test-build/*' '*/.test-build/*' \
+                 '.git/*' '*/.git/*' \
+                 '.env' '.env.*' '!*.env.example'
+          )
+          sha256sum star-janitor-source-final.zip > star-janitor-source-final.zip.sha256
+          unzip -t star-janitor-source-final.zip
+          unzip -Z1 star-janitor-source-final.zip > archive-entries.txt
+          grep -qx 'package-lock.json' archive-entries.txt
+          if grep -Eq '(^|/)(node_modules|\.next|ci-artifacts)(/|$)' archive-entries.txt; then
+            echo 'Forbidden directory found in source ZIP' >&2
+            grep -E '(^|/)(node_modules|\.next|ci-artifacts)(/|$)' archive-entries.txt >&2
+            exit 1
+          fi
+          cat star-janitor-source-final.zip.sha256
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-janitor-source-final
+          path: |
+            star-janitor-source-final.zip
+            star-janitor-source-final.zip.sha256
+            archive-entries.txt
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 40
