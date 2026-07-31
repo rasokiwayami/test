@@ -28,6 +28,7 @@ jobs:
           cat payload/chunk00 payload/chunk01 payload/chunk02 payload/chunk03 payload/chunk04 \
             | base64 --decode \
             | tar -xJf -
+          cp overrides/styles/responsive.css star-janitor-ci/styles/responsive.css
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
