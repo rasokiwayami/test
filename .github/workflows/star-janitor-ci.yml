@@ -1,0 +1,91 @@
+name: Star Janitor completion verification
+
+on:
+  push:
+    branches:
+      - ci/star-janitor-20260801
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out CI payload
+        uses: actions/checkout@v4
+
+      - name: Expand Star Janitor source
+        run: |
+          set -euo pipefail
+          cat payload/chunk00 payload/chunk01 payload/chunk02 payload/chunk03 payload/chunk04 \
+            | base64 --decode \
+            | tar -xJf -
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Record runtime versions
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts
+          { node --version; npm --version; } | tee ci-artifacts/runtime-versions.log
+
+      - name: Install dependencies and create lockfile
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npm install 2>&1 | tee ci-artifacts/npm-install.log
+
+      - name: Run full verification chain
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npm run verify 2>&1 | tee ci-artifacts/verify.log
+
+      - name: Install Playwright Chromium
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npx playwright install chromium 2>&1 | tee ci-artifacts/playwright-install.log
+
+      - name: Run Playwright E2E suite
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npm run test:e2e 2>&1 | tee ci-artifacts/e2e.log
+
+      - name: Capture exact-size visual evidence
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 > ci-artifacts/dev-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent http://127.0.0.1:3000/demo >/dev/null; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then cat ci-artifacts/dev-server.log; exit 1; fi
+            if [ "$attempt" -eq 120 ]; then cat ci-artifacts/dev-server.log; exit 1; fi
+            sleep 1
+          done
+          node .ci/capture-visuals.mjs 2>&1 | tee ci-artifacts/visual-capture.log
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: star-janitor-verification
+          path: |
+            star-janitor-ci/ci-artifacts/
+            star-janitor-ci/package-lock.json
+            star-janitor-ci/playwright-report/
+            star-janitor-ci/test-results/
+          if-no-files-found: warn
+          retention-days: 7
