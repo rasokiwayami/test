@@ -17,7 +17,7 @@ env:
 jobs:
   package-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -35,12 +35,21 @@ jobs:
           cp overrides/tsconfig.json star-janitor-ci/tsconfig.json
           cp overrides/tests/unit/build-config.test.mjs star-janitor-ci/tests/unit/build-config.test.mjs
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Generate and verify package lock
+        working-directory: star-janitor-ci
+        run: |
+          set -euo pipefail
+          npm install
+          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  package-lock.json" | sha256sum --check
+
       - name: Create and inspect source ZIP
         run: |
           set -euo pipefail
-          test -f star-janitor-ci/package-lock.json
-          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  star-janitor-ci/package-lock.json" | sha256sum --check
-
           rm -f star-janitor-source-final.zip star-janitor-source-final.zip.sha256
           (
             cd star-janitor-ci
@@ -52,7 +61,7 @@ jobs:
                  'test-results/*' '*/test-results/*' \
                  '.test-build/*' '*/.test-build/*' \
                  '.git/*' '*/.git/*' \
-                 '.env' '.env.*' '!*.env.example'
+                 '.env' '.env.local' '.env.production' '.env.development' '.env.test'
           )
           sha256sum star-janitor-source-final.zip > star-janitor-source-final.zip.sha256
           unzip -t star-janitor-source-final.zip
