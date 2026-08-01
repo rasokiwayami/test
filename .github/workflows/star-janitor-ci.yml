@@ -39,6 +39,7 @@ jobs:
           echo "a7861a45f85ddb0f5a67fc26b8cb7217c4f36942d6b7f9b4decb6200e4988d55  /tmp/star-janitor-design-overrides.tar.xz" \
             | sha256sum --check
           tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
+          cp overrides/final-docs/verification.md star-janitor-ci/docs/verification.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -128,6 +129,7 @@ jobs:
           echo "a7861a45f85ddb0f5a67fc26b8cb7217c4f36942d6b7f9b4decb6200e4988d55  /tmp/star-janitor-design-overrides.tar.xz" \
             | sha256sum --check
           tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
+          cp overrides/final-docs/verification.md star-janitor-ci/docs/verification.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
