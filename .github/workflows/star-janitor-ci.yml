@@ -1,4 +1,4 @@
-name: Star Janitor completion verification
+name: Star Janitor design port verification
 
 on:
   push:
@@ -17,7 +17,7 @@ env:
 jobs:
   package-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
@@ -25,7 +25,7 @@ jobs:
       - name: Check out CI payload
         uses: actions/checkout@v4
 
-      - name: Expand final Star Janitor candidate
+      - name: Expand verified baseline and design overrides
         run: |
           set -euo pipefail
           cat payload/chunk00 payload/chunk01 payload/chunk02 payload/chunk03 payload/chunk04 \
@@ -34,6 +34,11 @@ jobs:
           cp overrides/styles/responsive.css star-janitor-ci/styles/responsive.css
           cp overrides/tsconfig.json star-janitor-ci/tsconfig.json
           cp overrides/tests/unit/build-config.test.mjs star-janitor-ci/tests/unit/build-config.test.mjs
+          cat payload/design-override00 payload/design-override01 payload/design-override02 payload/design-override03 \
+            | base64 --decode > /tmp/star-janitor-design-overrides.tar.xz
+          echo "a7861a45f85ddb0f5a67fc26b8cb7217c4f36942d6b7f9b4decb6200e4988d55  /tmp/star-janitor-design-overrides.tar.xz" \
+            | sha256sum --check
+          tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,15 +50,16 @@ jobs:
         run: |
           set -euo pipefail
           npm install
-          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  package-lock.json" | sha256sum --check
+          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  package-lock.json" \
+            | sha256sum --check
 
       - name: Create and inspect source ZIP
         run: |
           set -euo pipefail
-          rm -f star-janitor-source-final.zip star-janitor-source-final.zip.sha256
+          rm -f star-janitor-design-source-final.zip star-janitor-design-source-final.zip.sha256
           (
             cd star-janitor-ci
-            zip -q -r ../star-janitor-source-final.zip . \
+            zip -q -r ../star-janitor-design-source-final.zip . \
               -x 'node_modules/*' '*/node_modules/*' \
                  '.next/*' '*/.next/*' \
                  'ci-artifacts/*' '*/ci-artifacts/*' \
@@ -61,26 +67,38 @@ jobs:
                  'test-results/*' '*/test-results/*' \
                  '.test-build/*' '*/.test-build/*' \
                  '.git/*' '*/.git/*' \
+                 'tsconfig.tsbuildinfo' '*/tsconfig.tsbuildinfo' \
                  '.env' '.env.local' '.env.production' '.env.development' '.env.test'
           )
-          sha256sum star-janitor-source-final.zip > star-janitor-source-final.zip.sha256
-          unzip -t star-janitor-source-final.zip
-          unzip -Z1 star-janitor-source-final.zip > archive-entries.txt
+          sha256sum star-janitor-design-source-final.zip \
+            > star-janitor-design-source-final.zip.sha256
+          unzip -t star-janitor-design-source-final.zip
+          unzip -Z1 star-janitor-design-source-final.zip > archive-entries.txt
           grep -qx 'package-lock.json' archive-entries.txt
+          for required in \
+            'features/dashboard/repository-row.tsx' \
+            'features/dashboard/confirmation-dialog.tsx' \
+            'styles/dashboard.css' \
+            'styles/dialog-error.css' \
+            'styles/responsive.css' \
+            'tests/unit/design-port-contracts.test.mjs' \
+            '.ci/capture-visuals.mjs'; do
+            grep -qx "$required" archive-entries.txt
+          done
           if grep -Eq '(^|/)(node_modules|\.next|ci-artifacts)(/|$)' archive-entries.txt; then
             echo 'Forbidden directory found in source ZIP' >&2
             grep -E '(^|/)(node_modules|\.next|ci-artifacts)(/|$)' archive-entries.txt >&2
             exit 1
           fi
-          cat star-janitor-source-final.zip.sha256
+          cat star-janitor-design-source-final.zip.sha256
 
       - name: Upload source ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: star-janitor-source-final
+          name: star-janitor-design-source-final
           path: |
-            star-janitor-source-final.zip
-            star-janitor-source-final.zip.sha256
+            star-janitor-design-source-final.zip
+            star-janitor-design-source-final.zip.sha256
             archive-entries.txt
           if-no-files-found: error
           retention-days: 7
@@ -88,7 +106,7 @@ jobs:
 
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -96,7 +114,7 @@ jobs:
       - name: Check out CI payload
         uses: actions/checkout@v4
 
-      - name: Expand final Star Janitor candidate
+      - name: Expand verified baseline and design overrides
         run: |
           set -euo pipefail
           cat payload/chunk00 payload/chunk01 payload/chunk02 payload/chunk03 payload/chunk04 \
@@ -105,6 +123,11 @@ jobs:
           cp overrides/styles/responsive.css star-janitor-ci/styles/responsive.css
           cp overrides/tsconfig.json star-janitor-ci/tsconfig.json
           cp overrides/tests/unit/build-config.test.mjs star-janitor-ci/tests/unit/build-config.test.mjs
+          cat payload/design-override00 payload/design-override01 payload/design-override02 payload/design-override03 \
+            | base64 --decode > /tmp/star-janitor-design-overrides.tar.xz
+          echo "a7861a45f85ddb0f5a67fc26b8cb7217c4f36942d6b7f9b4decb6200e4988d55  /tmp/star-janitor-design-overrides.tar.xz" \
+            | sha256sum --check
+          tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -118,12 +141,13 @@ jobs:
           mkdir -p ci-artifacts
           { node --version; npm --version; } | tee ci-artifacts/runtime-versions.log
 
-      - name: Install dependencies and verify the final lockfile
+      - name: Install dependencies and verify package lock
         working-directory: star-janitor-ci
         run: |
           set -euo pipefail
           npm install 2>&1 | tee ci-artifacts/npm-install.log
-          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  package-lock.json" | sha256sum --check
+          echo "ce1f9307baeacb6ecc2ff74bb5c2f155f69905e13fefde49686d327a6a22edc5  package-lock.json" \
+            | sha256sum --check
           npm audit --json > ci-artifacts/npm-audit.json || true
 
       - name: Run full verification chain
@@ -157,8 +181,14 @@ jobs:
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 120); do
             if curl --fail --silent http://127.0.0.1:3000/demo >/dev/null; then break; fi
-            if ! kill -0 "$server_pid" 2>/dev/null; then cat ci-artifacts/production-server.log; exit 1; fi
-            if [ "$attempt" -eq 120 ]; then cat ci-artifacts/production-server.log; exit 1; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat ci-artifacts/production-server.log
+              exit 1
+            fi
+            if [ "$attempt" -eq 120 ]; then
+              cat ci-artifacts/production-server.log
+              exit 1
+            fi
             sleep 1
           done
           node .ci/capture-visuals.mjs 2>&1 | tee ci-artifacts/visual-capture.log
@@ -167,7 +197,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: star-janitor-verification
+          name: star-janitor-design-verification
           path: |
             star-janitor-ci/ci-artifacts/
             star-janitor-ci/package-lock.json
