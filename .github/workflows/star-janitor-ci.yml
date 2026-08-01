@@ -40,6 +40,8 @@ jobs:
             | sha256sum --check
           tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
           cp overrides/final-docs/verification.md star-janitor-ci/docs/verification.md
+          cp overrides/final-docs/README.md star-janitor-ci/README.md
+          cp overrides/final-docs/CODEX_HANDOFF.md star-janitor-ci/CODEX_HANDOFF.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -83,7 +85,10 @@ jobs:
             'styles/dialog-error.css' \
             'styles/responsive.css' \
             'tests/unit/design-port-contracts.test.mjs' \
-            '.ci/capture-visuals.mjs'; do
+            '.ci/capture-visuals.mjs' \
+            'docs/verification.md' \
+            'README.md' \
+            'CODEX_HANDOFF.md'; do
             grep -qx "$required" archive-entries.txt
           done
           if grep -Eq '(^|/)(node_modules|\.next|ci-artifacts)(/|$)' archive-entries.txt; then
@@ -130,6 +135,8 @@ jobs:
             | sha256sum --check
           tar -xJf /tmp/star-janitor-design-overrides.tar.xz -C star-janitor-ci
           cp overrides/final-docs/verification.md star-janitor-ci/docs/verification.md
+          cp overrides/final-docs/README.md star-janitor-ci/README.md
+          cp overrides/final-docs/CODEX_HANDOFF.md star-janitor-ci/CODEX_HANDOFF.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
